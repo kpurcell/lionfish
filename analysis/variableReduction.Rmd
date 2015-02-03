@@ -1,0 +1,163 @@
+---
+title: "SEFIS Habitat Variable Reduction"
+author: "KM Purcell"
+date: "Monday, February 02, 2015"
+output: word_document
+---
+
+
+## Habitat Classification
+
+The *object of this analysis* is to simplify the 6-variable habitat description data from the SEFIS camera survey into a smaller set or univariate descriptor that is more amenable for downstream modeling applications.  This is essentially a dimensionality problem which are traditionally approached with **classification** or **ordination** based approaches.  
+
+```{r data_input, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+library(dplyr)
+library(vegan)
+# Import data from Red Snapper for an example
+#hab <- read.csv(file = file.choose(), header = TRUE, )
+hab <- read.table(file = "C://Users//Kevin.Purcell//Documents//GitHub//lionfish//data//lionfish_video_data.csv", na.strings="N/A", sep=",", header=TRUE)
+```
+
+## Data Munging
+Initial data was derived from an Access query, via Christina.  Nate sent an overview of the lionfish [field codes and metadata](https://mail.google.com/mail/u/0/#inbox/14b5003b047cb50e) for some context to the data vectors.
+
+
+Initial issues with the imported data set:  
+
+* The only designated NA strings are "N/A", the "unknown" and "other" strings are in fact information (re: convo w/ NB).  
+* Missing values in frame vectors are being interpreted as NAs during import.  [ ]
+* Time variable currently scored as a factor.                                   [ ]
+
+
+First I want to start with the dimensionality reduction problem.  I will try to use a clustering approach.  So I will limit the data set to only those vectors relevant to habitat.
+
+
+```{r data_munge}
+# Limit to habitat variables
+clust <- hab %>%
+  filter(Year==2011) %>%
+  select(Biotic_Density:Relief)
+head(clust)
+```
+Now I want to remove any NAs from the habitat variables
+```{r}
+clust_input <- na.omit(clust)
+summary(clust_input)
+```
+
+Have to convert factors to numerical values for interpretation by the `vegan()` functions.
+```{r, echo=FALSE}
+clust_input$codedBT[clust_input$Biotic_Type=="Algae"] <- "1"
+clust_input$codedBT[clust_input$Biotic_Type=="Other"] <- "2"
+clust_input$codedBT[clust_input$Biotic_Type=="Unknown"] <- "3"
+
+clust_input$codedBH[clust_input$Biotic_Height=="High"] <- "1"
+clust_input$codedBH[clust_input$Biotic_Height=="Low"] <- "2"
+
+clust_input$codedS[clust_input$Size=="Coarse"] <- "1"
+clust_input$codedS[clust_input$Size=="Continuous"] <- "2"
+
+clust_input$codedR[clust_input$Relief=="High"] <- "1"
+clust_input$codedR[clust_input$Relief=="Low"] <- "3"
+clust_input$codedR[clust_input$Relief=="Moderate"] <- "2"
+```
+Re-coded variables look like:
+```{r, echo=FALSE}
+head(clust_input)
+```
+
+
+
+Now I want to convert that data.frame to a matrix for input with the `vegan()` functions
+```{r}
+clust_input2 <- clust_input %>%
+  select(Biotic_Density, Substrate, codedBT:codedR)
+summary(clust_input2)
+clust_input2$codedBT <- as.numeric(clust_input2$codedBT)
+clust_input2$codedBH <- as.numeric(clust_input2$codedBH)
+clust_input2$codedS <- as.numeric(clust_input2$codedS)
+clust_input2$codedR <- as.numeric(clust_input2$codedR)
+
+# Convert to matrix for vegan
+matrix <- as.matrix(clust_input2)
+str(matrix)
+```
+
+## Analysis
+
+Calculate a distance matrix using the `vegdist()` function.  An early reference to the use of [gower](https://stat.ethz.ch/pipermail/r-sig-ecology/2010-December/001791.html) dissimilarity indicated that the calculation was effective for use on both continuous and categorical variables.  
+
+```{r dist_calc}
+# Calculate the Gower Distance as an input of hclust
+library(vegan)
+distMatrix <- vegdist(matrix,method = "gower",na.rm = TRUE)
+```
+Use the Gower dissimilarity matrix as an input for the [hierarchical clustering](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/hclust.html) function in the `vegan` package.  
+
+First, I will use the `"single"` clustering option, which is essentially a nearest-neighbor algorithm.  From our prospective this is comparable to a minimum spanning tree.  In this case I favor this approach because a strength of the `"single"` approach is its ability to locate discontinuities in the data which is our primary objective.  
+```{r}
+clus <- hclust(distMatrix, "single")
+plot(clus)
+```
+Second I apply the `"comple"` option, which is a noted for is ability to form compact clusters, this is a secondary notion for us because it is has no real effect on our interpretation.  
+
+```{r}
+cluc <- hclust(distMatrix, "complete")
+plot(cluc)
+```
+
+I attempted to use the `"average"` option, essentially because it was applied in my example approach and because it is considered a middle of the road approach.
+
+```{r}
+# This plot crashes R
+clua <- hclust(distMatrix, "average")
+plot(clua)
+```
+
+In my opinion for a theoretical stand point the initial `"single"` options fits our analysis criteria and shows solid ability to identify discontinuities in our actual input data. However to compare performance of the various linkage options I used the `cophenetic()` function which estimates the dissimilarity from each tree based on all pairs of points.  The name refers to **Cophenetic correlation** which measures the similarity between the original dissimilarity and estimated dissimilarity from the derived trees. 
+
+
+```{r}
+range(distMatrix)
+
+cor(distMatrix, cophenetic(clus))
+
+cor(distMatrix, cophenetic(cluc))
+
+cor(distMatrix, cophenetic(clua))
+```
+
+The highest dissimilarity was derived from the `"average"` linkage approach so I will proceed with that.  
+```{r}
+plot(clua)
+rect.hclust(clua, 3)
+grp <- cutree(clua, 3)
+```
+
+A look at the distribution of substrate by groups
+```{r, echo=FALSE}
+par(mfrow=c(2,3))
+boxplot(Biotic_Density ~ grp, data=matrix, notch=F, main="Biotic Density")
+boxplot(Substrate ~ grp, data=matrix, notch=F, main="Substrate")
+boxplot(codedBT ~ grp, data=matrix, main="Biotic Type")
+boxplot(codedBH ~ grp, data=matrix, main="Biotic Height")
+boxplot(codedS ~ grp, data=matrix, main="Size")
+boxplot(codedR ~ grp, data=matrix, main="Relief")
+```
+
+
+Using an ordination approach we can look at the how our results compare between two distinct classification methodologies.  
+
+```{r}
+ord <- cca(matrix)
+plot(ord, display="sites")
+ordihull(ord, grp, lty = 2, col = "Blue")
+```
+
+Here there is considerable overlap among the groups, however with 6-dimensional data it is not necessarily a problem.  Primarily it corroborates what our Habitat-by-group boxplots showed, which was that each group was defined by a unique set of conditions not necessarily driven by on or two factors.  
+
+```{r}
+sessionInfo()
+```
+
+

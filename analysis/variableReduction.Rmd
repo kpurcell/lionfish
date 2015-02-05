@@ -160,4 +160,66 @@ Here there is considerable overlap among the groups, however with 6-dimensional 
 sessionInfo()
 ```
 
+This will incorporate a *k-means* analysis
+
+```{r}
+library(reshape2)
+library(ggplot2)
+
+crit <- vector()
+nk <- 1:10
+for (k in nk){
+  m <- kmeans(matrix, k)
+  crit <- c(crit, sum(m$withinss))
+}
+crit
+
+dsc <- data.frame(k=nk, crit=scale(crit))
+dscm <- melt(dsc, id.vars="k", variable.name="Measure")
+
+p <- ggplot(dscm, aes(x=k, y=value, colour=Measure))
+p <- p + geom_point(aes(shape=Measure))
+p <- p + geom_line(aes(linetype=Measure))
+p <- p + scale_x_continuous(breaks=nk, labels=nk)
+p <- p + theme(legend.position="none")
+p
+```
+
+```{r}
+nclust <- 4
+model <- m.kms <- kmeans(scale(matrix), nclust)
+dscm <- melt(model$centers)
+names(dscm) <- c("Clusters", "Variable", "Value")
+dscm$Cluster <- factor(dscm$Cluster)
+dscm$Order <- as.vector(sapply(1:length(matrix), rep, nclust))
+p <- ggplot(dscm,
+            aes(x=reorder(Variable, Order),
+                y=Value, group=Cluster, colour=Cluster))
+p <- p + coord_polar()
+p <- p + geom_point()
+p <- p + geom_path()
+p <- p + labs(x=NULL, y=NULL)
+p <- p + theme(axis.ticks.y=element_blank(), axis.text.y=element_blank())
+p
+```
+
+```{r}
+source("http://onepager.togaware.com/CreateRadialPlot.R")
+dsc <- data.frame(group=factor(1:4), model$centers)
+CreateRadialPlot(dsc, grid.min=-2, grid.max=2, plot.extent.x=1.5)
+
+#Viz a single group
+CreateRadialPlot(subset(dsc, group==4), grid.min=-2, grid.max=2, plot.extent.x=1.5)
+
+#multi-panel with ggplot
+p1 <- CreateRadialPlot(subset(dsc, group==1), grid.min=-2, grid.max=2, plot.extent.x=1.5)
+p2 <- CreateRadialPlot(subset(dsc, group==2), grid.min=-2, grid.max=2, plot.extent.x=1.5)
+p3 <- CreateRadialPlot(subset(dsc, group==3), grid.min=-2, grid.max=2, plot.extent.x=1.5)
+p4 <- CreateRadialPlot(subset(dsc, group==4), grid.min=-2, grid.max=2, plot.extent.x=1.5)
+
+library(gridExtra)
+grid.arrange(p1+ggtitle("Cluster1"), p2+ggtitle("Cluster2"),
+             p3+ggtitle("Cluster3"), p4+ggtitle("Cluster4"))
+```
+
 

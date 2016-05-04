@@ -15,7 +15,7 @@ library(dplyr)
 library(vegan)
 # Import data from Red Snapper for an example
 #hab <- read.csv(file = file.choose(), header = TRUE, )
-hab <- read.table(file = "C://Users//Kevin.Purcell//Documents//GitHub//lionfish//data//lionfish_video_data.csv", na.strings="N/A", sep=",", header=TRUE)
+hab <- read.table(file = "/Users/kpurcell/Documents/GitHub/lionfish/data/lionfish_video_data.csv", na.strings="N/A", sep=",", header=TRUE)
 ```
 
 ## Data Munging
@@ -95,7 +95,7 @@ distMatrix <- vegdist(matrix,method = "gower",na.rm = TRUE)
 Use the Gower dissimilarity matrix as an input for the [hierarchical clustering](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/hclust.html) function in the `vegan` package.  
 
 First, I will use the `"single"` clustering option, which is essentially a nearest-neighbor algorithm.  From our prospective this is comparable to a minimum spanning tree.  In this case I favor this approach because a strength of the `"single"` approach is its ability to locate discontinuities in the data which is our primary objective.  
-```{r}
+```{r, fig.height=5, fig.width=5}
 clus <- hclust(distMatrix, "single")
 plot(clus)
 ```
